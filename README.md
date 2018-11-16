@@ -1,2 +1,2 @@
 # hazus
-This is Hazus public GitHub repository lead by Niyamit
+This is the Hazus public GitHub repository lead by Niyamit
