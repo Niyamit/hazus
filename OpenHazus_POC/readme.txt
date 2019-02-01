@@ -12,14 +12,6 @@ Lookup Tables
 In the directory you run this script, the program will look for a folder titled lookuptables for reference tables in a .csv format for DDF values if they are not found in the input .csv file. Create the folder and load it with the required .csv files IF the folder is not included.
 
 
-How to start:
-
-
-Navigate to python_env, then double click on gui_program.bat.
-
-A window'd GUI should launch with field inputs.
-A console log should also launch; check here for errors.
-
 The GUI:
 
 
