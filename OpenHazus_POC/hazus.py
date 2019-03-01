@@ -61,22 +61,24 @@
 # ---------------------------------------------------------------------------
 
 # Variations between systems; some import these by default, others don't. Be explicit.
-import os,csv,sys,time,math,datetime,subprocess,numpy as np
-from osgeo import gdal
-
+import os,csv,sys,time,math,datetime,subprocess,numpy as np, cv2
+from osgeo import gdal, osr, gdal_array
+from affine import Affine
+import utm
+#gdal.SetCacheMax(2**30*5)
 
 #########################################################################################################
 # Main function. Five parameters See end for main procedure.
 #########################################################################################################
 log = []
-def flood_damage(UDFOrig, LUT_Dir, ResultsDir, DepthGrids, QC_Warning,fmap):
+def flood_damage(UDFOrig, LUT_Dir, ResultsDir, DepthGrids, QC_Warning, fmap):
 	# UDFOrig = USer-supplied UDF input file. Full pathname required
 	# LUT_Dir = folder name where the Lookup table libraries reside
 	# ResultsDir = Where the output file geodatabase will be created. Folder (dir) must exist, else fail
 	# DepthGrids = one or more flood depth grids
 	# QC_Warning = Boolean, report on informative inconsistency observations if selected, otherwise suppress them
     
-    try:
+    #try:
         # Measure script performance
         start_time = time.time()
         QC_Warning = QC_Warning.lower() == 'true'
@@ -90,7 +92,6 @@ def flood_damage(UDFOrig, LUT_Dir, ResultsDir, DepthGrids, QC_Warning,fmap):
         # UDF Input Attributes. The following are standard Hazus names/capitalizations.
         #########################################################################################################
         UserDefinedFltyId,OccupancyClass,Cost,ContentCost,Area,NumStories,FoundationType,FirstFloorHt,BldgDamageFnID,ContDamageFnId,InvDamageFnId,InvCost,flC,latitude,longitude = [value if value != '' and any(value in s for s in field_names) == True else field for field, value in fmap]
-        
                 
         # If your UDF Naming Convention differs from the Hazus namings,
         # you can specify your names here, and override the assignments above
@@ -171,15 +172,7 @@ def flood_damage(UDFOrig, LUT_Dir, ResultsDir, DepthGrids, QC_Warning,fmap):
         #xx = "flBldgEconParamOwnerOccupied.csv"
         # Process some of the user input.
         UDFRoot	 = os.path.basename(UDFOrig)
-        #ts = ('{:%Y%m%d-%H%M}'.format(datetime.datetime.now()))  # Date Stamp for the file gdb name
-        #x = UDFRoot +"_Results_" + ts
-        #y = x #+ ".gdb"
-        #z = os.path.join(ResultsDir,y)
-        #if os.path.exists(z): #if arcpy.Exists(z): # QGIS?
-        	#print("Note that an existing fgdb already exists; we are deleting that and creating a new fgdb")
-        	#print("   "+ z)
-        	#shutil.rmtree(z) #arcpy.Delete_management(z) # QGIS?
-        #os.makedirs(os.path.join(ResultsDir,x))# arcpy.CreateFileGDB_management(ResultsDir,x)
+        
         #Resultsfgdb = os.path.join(ResultsDir,y)
         Resultsfgdb = ResultsDir
         #print("Results geodatabase: " + Resultsfgdb)
@@ -240,36 +233,45 @@ def flood_damage(UDFOrig, LUT_Dir, ResultsDir, DepthGrids, QC_Warning,fmap):
         #
         CoastalZoneSupplied = ubddf = ucddf = uiddf =  cdest = idest = CoastalZoneCode = uccost = uicost = 0
     
-        xt = [field for field in field_names if str(field) == flC ]#xt = arcpy.ListFields(UDFOrig,flC)# QGIS ?
+        xt = [field for field in field_names if str(field) == flC ]
         if len(xt):
         	print( "Coastal Flooding attribute (flC) supplied. Will use where specified")
         	CoastalZoneSupplied = 1
     
-        xt = [field for field in field_names if str(field) == BldgDamageFnID ]#xt = arcpy.ListFields(UDFOrig,BldgDamageFnID)# QGIS ?
+        xt = [field for field in field_names if str(field) == BldgDamageFnID ]
         if len(xt):
         	print( "User-supplied Building Depth Damage Function (BldgDamageFnID) attribute supplied. Will use where specified")
         	ubddf = 1
     
-        xt = [field for field in field_names if str(field) == ContDamageFnId ]#xt = arcpy.ListFields(UDFOrig,ContDamageFnId)# QGIS ?
+        xt = [field for field in field_names if str(field) == ContDamageFnId ]
         if len(xt):
         	print("User-supplied Content  Depth Damage Function attribute (ContDamageFnId supplied. Will use where specified")
         	ucddf = 1
     
-        xt = [field for field in field_names if str(field) == InvDamageFnId ]#xt = arcpy.ListFields(UDFOrig,InvDamageFnId)# QGIS ?
+        xt = [field for field in field_names if str(field) == InvDamageFnId ]
         if len(xt):
         	print("User-supplied Inventory Depth Damage Function attribute (InvDamageFnId supplied. Will use where specified")
         	uiddf = 1
     
-        xt = [field for field in field_names if str(field) == ContentCost ]#xt = arcpy.ListFields(UDFOrig,ContentCost)# QGIS ?
+        xt = [field for field in field_names if str(field) == ContentCost ]
         if len(xt):
         	print( "User-supplied Content Cost supplied.  Will use user supplied value where specified, else use the default")
         	uccost = 1
     
-        xt = [field for field in field_names if str(field) == InvCost ]#xt = arcpy.ListFields(UDFOrig,InvCost)
+        xt = [field for field in field_names if str(field) == InvCost ]
         if len(xt):
         	print("User-supplied Inventory Cost supplied.  Will use user supplied value where specified, else use the default")
         	uicost = 1
-    
+        	
+        #Custom DDF assignment based on tables	
+        DDFAssign = ['SOoccupId_Occ_Xref','flBldgStructDmgFinal','flBldgContDmgFinal','flBldgInvDmgFinal','OccupancyTypes']
+        DDFTables = {}
+        for DDF in DDFAssign:
+            with open(os.path.join(LUT_Dir,DDF+'.csv'), newline='') as csvfile:
+                file = csv.DictReader(csvfile)
+                DDFTable = [row for row in file]
+                DDFTables[DDF] = DDFTable
+
         # Process each depth grid specified by user
         DGrids = DepthGrids.split(';')   # Using the interactive window, it's not a list. Make it so.
         for dgp in DGrids:
@@ -289,7 +291,7 @@ def flood_damage(UDFOrig, LUT_Dir, ResultsDir, DepthGrids, QC_Warning,fmap):
         	y = os.path.split(dgp)[1]
         	x = UDFRoot.split('.')[0] + "_" + y.split('.')[0]
         	ResultsFile = os.path.join(Resultsfgdb,x)
-        	#print("Writing results to " + ResultsFile)
+        	print("Writing results to " + ResultsFile)
         	gridroot = y    #  Put into an attribute in the Results file. Redundant, but handy when appending multiple results files together.
     
         	# Some research should go into INTERPOLATE versus NONE in the next function.
@@ -306,42 +308,82 @@ def flood_damage(UDFOrig, LUT_Dir, ResultsDir, DepthGrids, QC_Warning,fmap):
         	file_out = open(os.path.join(Resultsfgdb,x+".csv"), 'w')
         	
         	raster = gdal.Open(dgp)
+        	
+        	#os.sys('gdalwarp '+dgp+' '+' C:/Users/Owner/Desktop/work.tif -t_srs "+proj=longlat +ellps=WGS84"')
+        	
         	band = raster.GetRasterBand(1)
         	cols = raster.RasterXSize
         	rows = raster.RasterYSize
         	transform = raster.GetGeoTransform()
+        	
         	xOrigin = transform[0]
         	yOrigin = transform[3]
         	pixelWidth = transform[1]
         	pixelHeight = -transform[5]
-        	data = band.ReadAsArray(0, 0, cols, rows)
-            
+        	data = band.ReadAsArray(0, 0, cols, rows)#gdal_array.LoadFile(dgp)
+        	IsUTM = True if osr.SpatialReference(wkt=raster.GetProjection()).GetAttrValue('UNIT') == 'metre' else False
+        	print('Is it UTM? ', IsUTM)
         	
+        	"""
+        	inProj = Proj(init='epsg:3857')
+        	outProj = Proj(init='epsg:4326')
+        	x1,y1 = xOrigin, yOrigin
+        	x2,y2 = Transform(inProj,outProj,x1,y1)
+        	print(x2,y2)
+        	print('utm conv ', utm.from_latlon(y1, x1))
+        	ds=raster
+        	prj=ds.GetProjection()
+        	print(prj,type(prj))
+
+        	srs=osr.SpatialReference(wkt=prj)
+        	print(srs.GetAttrValue('UNIT'))
+        	srs.EPSGTreatsAsNorthingEasting()
+        	print('special ',srs.GetAttrValue('UNIT'),srs.GetAngularUnits(),srs.GetAngularUnitsName(),srs.GetLinearUnits(),srs.GetLinearUnitsName(),srs.GetProjParm('EPSG'),srs.GetUTMZone())
+        	print(type(srs),srs,help(srs))
+        	"""
+        	"""
+
+        	def retrieve_pixel_value(geo_coord, data_source = raster):  
+        		x, y = geo_coord[0], geo_coord[1]
+        		forward_transform =  Affine.from_gdal(*data_source.GetGeoTransform())
+        		reverse_transform = ~forward_transform
+        		px, py = reverse_transform * (x, y)
+        		px, py = int(px + 0.5), int(py + 0.5)
+        		pixel_coord = px, py
+        		print(px,py,x,y)
+        		data_array = np.array(data_source.GetRasterBand(1).ReadAsArray())
+        		return data_array[pixel_coord[0]][pixel_coord[1]]
+        	"""
         	with open(UDFOrig, newline='') as csvfile:
         		writer = csv.DictWriter(file_out, delimiter=',', lineterminator='\n', fieldnames = field_names)
         		file = csv.DictReader(csvfile)
         		for row in file:
         			def getValue(name):# Get value of row from name.
         				if name != Depth_Grid:
-        					return row[name].strip()
+        					val = row[name].strip()
+        					return val
         				else:
+        					
         					X = float(getValue(longitude))
         					Y = float(getValue(latitude))
-        					
+        					X, Y = list(utm.from_latlon(Y, X))[:2] if IsUTM else X, Y
         					col = int((X - xOrigin) / pixelWidth)
         					roww = int((yOrigin - Y ) / pixelHeight)
+        					
         					val = data[roww][col]
+        					
+        					#val = retrieve_pixel_value((X,Y))
         					if abs(val) > 10000:
         						val = 0
         					row[name] = val
-        					return(val)
+        					return(float(val))
     
         			def setValue(name, value):# Set value of attribute from name to given parameter.
         				row[name] = value
         			
         			counter += 1
-        			#if counter % 10000 == 0 and QC_Warning:
-        				#print( "   processing record " + str(counter))
+        			if counter % 10000 == 0:# and QC_Warning:
+        				print( "   processing record " + str(counter))
     
         			###################################################
         			# Depth Adjustments
@@ -831,14 +873,14 @@ def flood_damage(UDFOrig, LUT_Dir, ResultsDir, DepthGrids, QC_Warning,fmap):
         				continue
         			writer.writerow(row)
         print("Program Duration:  %s seconds" %  int((time.time() - start_time)))
+        print("Total records processed: " + str(counter))
         return(True, log)
-    		
-    		#print("Total records processed: " + str(counter))
-    
+
     		# Measuring the script performance
-    	
-    except:
-        return(False, log)
+    #except Exception as e:
+        #print(e)
+        #return(False, log)
+        
 
 # This test allows the script to be used from the operating
 # system command prompt (stand-alone), in a Python IDE,
@@ -854,3 +896,4 @@ def local(spreadsheet,fmap):
     print(argv)
     
     return flood_damage(*argv)
+
