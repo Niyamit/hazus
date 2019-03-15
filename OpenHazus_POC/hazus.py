@@ -61,10 +61,8 @@
 # ---------------------------------------------------------------------------
 
 # Variations between systems; some import these by default, others don't. Be explicit.
-import os,csv,sys,time,math,datetime,subprocess,numpy as np, cv2
+import os,csv,sys,time,math,datetime,subprocess,numpy as np
 from osgeo import gdal, osr, gdal_array
-from affine import Affine
-import utm
 #gdal.SetCacheMax(2**30*5)
 
 #########################################################################################################
@@ -78,7 +76,7 @@ def flood_damage(UDFOrig, LUT_Dir, ResultsDir, DepthGrids, QC_Warning, fmap):
 	# DepthGrids = one or more flood depth grids
 	# QC_Warning = Boolean, report on informative inconsistency observations if selected, otherwise suppress them
     
-    #try:
+    try:
         # Measure script performance
         start_time = time.time()
         QC_Warning = QC_Warning.lower() == 'true'
@@ -91,7 +89,7 @@ def flood_damage(UDFOrig, LUT_Dir, ResultsDir, DepthGrids, QC_Warning, fmap):
         #########################################################################################################
         # UDF Input Attributes. The following are standard Hazus names/capitalizations.
         #########################################################################################################
-        UserDefinedFltyId,OccupancyClass,Cost,ContentCost,Area,NumStories,FoundationType,FirstFloorHt,BldgDamageFnID,ContDamageFnId,InvDamageFnId,InvCost,flC,latitude,longitude = [value if value != '' and any(value in s for s in field_names) == True else field for field, value in fmap]
+        UserDefinedFltyId,OccupancyClass,Cost,ContentCost,Area,NumStories,FoundationType,FirstFloorHt,BldgDamageFnID,ContDamageFnId,InvDamageFnId,InvCost,SOID,flC,latitude,longitude = fmap#[value if value != '' and any(value in s for s in field_names) == True else field for field, value in fmap]
                 
         # If your UDF Naming Convention differs from the Hazus namings,
         # you can specify your names here, and override the assignments above
@@ -122,7 +120,7 @@ def flood_damage(UDFOrig, LUT_Dir, ResultsDir, DepthGrids, QC_Warning, fmap):
         flExp 		= "flExp"
         Depth_in_Struc	= "Depth_in_Struc"
         Depth_Grid	= "Depth_Grid"    # The renamed raster sample data. "RASTERVALU" is not a useful name
-        SOID		= "SOID"		# Specific Occupancy ID
+        #SOID		= "SOID"		# Specific Occupancy ID
         BDDF_ID		= "BDDF_ID"
         CDDF_ID		= "CDDF_ID"
         IDDF_ID		= "IDDF_ID"
@@ -321,8 +319,8 @@ def flood_damage(UDFOrig, LUT_Dir, ResultsDir, DepthGrids, QC_Warning, fmap):
         	pixelWidth = transform[1]
         	pixelHeight = -transform[5]
         	data = band.ReadAsArray(0, 0, cols, rows)#gdal_array.LoadFile(dgp)
-        	IsUTM = True if osr.SpatialReference(wkt=raster.GetProjection()).GetAttrValue('UNIT') == 'metre' else False
-        	print('Is it UTM? ', IsUTM)
+        	#IsUTM = True if osr.SpatialReference(wkt=raster.GetProjection()).GetAttrValue('UNIT') == 'metre' else False
+        	#print('Is it UTM? ', IsUTM)
         	
         	"""
         	inProj = Proj(init='epsg:3857')
@@ -366,7 +364,7 @@ def flood_damage(UDFOrig, LUT_Dir, ResultsDir, DepthGrids, QC_Warning, fmap):
         					
         					X = float(getValue(longitude))
         					Y = float(getValue(latitude))
-        					X, Y = list(utm.from_latlon(Y, X))[:2] if IsUTM else X, Y
+        					#X, Y = list(utm.from_latlon(Y, X))[:2] if IsUTM else X, Y
         					col = int((X - xOrigin) / pixelWidth)
         					roww = int((yOrigin - Y ) / pixelHeight)
         					
@@ -877,9 +875,9 @@ def flood_damage(UDFOrig, LUT_Dir, ResultsDir, DepthGrids, QC_Warning, fmap):
         return(True, log)
 
     		# Measuring the script performance
-    #except Exception as e:
-        #print(e)
-        #return(False, log)
+    except Exception as e:
+        print(e)
+        return(False, log)
         
 
 # This test allows the script to be used from the operating
@@ -888,9 +886,10 @@ def flood_damage(UDFOrig, LUT_Dir, ResultsDir, DepthGrids, QC_Warning, fmap):
 # another script
 
 def local(spreadsheet,fmap):
-    raster = fmap[-1][-1]
+    raster = fmap[-1]#[-1]
     fmap = fmap[:-1]
     cwd = os.getcwd()
+    #cwd = os.path.dirname(cwd)
     outDir = os.path.dirname(spreadsheet)
     argv = (spreadsheet,os.path.join(cwd,r"lookuptables"),outDir,os.path.join(cwd,'rasters',raster),"False",fmap)
     print(argv)
