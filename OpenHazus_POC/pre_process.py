@@ -1,7 +1,7 @@
 import os, csv
 
 dir = os.getcwd()
-dir = os.path.dirname(dir)
+#dir = os.path.dirname(dir)
 
 def process(input,fmap):
     try:

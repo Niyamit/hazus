@@ -1,3 +1,6 @@
+Full ready-to-run demo package available here: https://drive.google.com/file/d/1XMXR9M5yCRFBKvJ0WdbXHVgl3-qLlwYr/view?usp=sharing
+
+
 Prerequisites:
 
 
@@ -37,9 +40,8 @@ If the program runs succesfully, you will find the final product in .csv file-fo
 
 Troubleshooting:
 
+If the input UDF file is open in another program, this program will not run.
 
-If the required fields aren't found using either the given or default field names, the program can not run. Send log info to the administration.
+If the required fields aren't found using either the given or default field names, the run button will be grayed out and will not work.
 
-If a raster file is not selected, the program can not run, and will give an error.
-
-If a .csv file is not selected, the program can not run, and will give an error.
+If a depth-grid is selected that does not correspond to the coordinates of the input UDF file, the program will fail. 

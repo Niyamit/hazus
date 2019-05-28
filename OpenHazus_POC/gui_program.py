@@ -5,7 +5,7 @@ from os import listdir
 from os.path import isfile, join
 
 dir = os.getcwd()
-dir = os.path.dirname(dir)
+#dir = os.path.dirname(dir)
 cwd = os.path.join(dir,'rasters')# Default raster directory
 hazardTypes = {'Riverine':'HazardRiverine','CoastalV':'V','CoastalA':'CAE'}
 rasters = [f for f in listdir(cwd) if isfile(join(cwd, f)) and f.endswith('.tif')]# Search rasters folder for all .tif files and make a list

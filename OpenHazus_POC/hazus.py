@@ -894,7 +894,7 @@ def local(spreadsheet,fmap):
     raster = fmap[-1]#[-1]
     fmap = fmap[:-1]
     cwd = os.getcwd()
-    cwd = os.path.dirname(cwd)
+    #cwd = os.path.dirname(cwd)
     outDir = os.path.dirname(spreadsheet)
     argv = (spreadsheet,os.path.join(cwd,r"lookuptables"),outDir,os.path.join(cwd,'rasters',raster),"False",fmap)
     
